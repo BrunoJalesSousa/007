@@ -1,0 +1,282 @@
+
+pip3 install CounterFit
+
+pip3 install werkzeug==2.2.2
+
+pip3 install counterfit-connection
+
+pip3 install counterfit-shims-grove
+
+pip3 install azure-iot-device
+
+az login
+
+counterfit
+
+================================================================================================
+CRIAR APP.PY DENTRO DA PASTA ONDE SE VAI COLOCAR TUDO (EXEMPLO DE CÓDIGO ABAIXO COM SENSOR DE TEMPERATURA ADC NO PIN 3 E LED NO PIN 6):
+
+
+from counterfit_connection import CounterFitConnection
+CounterFitConnection.init('127.0.0.1', 5000)
+
+import time
+from counterfit_shims_grove.adc import ADC
+from counterfit_shims_grove.grove_led import GroveLed
+import json
+from azure.iot.device import IoTHubDeviceClient, Message, MethodResponse
+
+connection_string = '<CONNECTION_STRING>'
+
+adc = ADC()
+ATUADOR = GroveLed(6)
+
+device_client = IoTHubDeviceClient.create_from_connection_string(connection_string)
+
+print('Connecting')
+device_client.connect()
+print('Connected')
+
+def handle_method_request(request):
+    print("Direct method received - ", request.name)
+    
+    if request.name == "ATUADOR_on":
+        ATUADOR.on()
+    elif request.name == "ATUADOR_off":
+        ATUADOR.off()
+
+    method_response = MethodResponse.create_from_method_request(request, 200)
+    device_client.send_method_response(method_response)
+
+device_client.on_method_request_received = handle_method_request
+
+while True:
+    valorSENSOR = adc.read(3)
+    print("SENSOR:", valorSENSOR)
+
+    
+    message = Message(json.dumps({ 'SENSOR': valorSENSOR }))
+    device_client.send_message(message)
+
+    time.sleep(15)
+
+================================================================================================
+LISTAR E APAGAR RESOURCE GROUPS (SE NECESSÁRIO):
+
+az group list --output table
+
+az group delete --name <MyResourceGroup>
+================================================================================================
+CRIAR RESOURCE GROUP:
+
+az group create --name <nome-do-grupo> --location <location>
+
+================================================================================================
+CRIAR HUB:
+
+az iot hub create --resource-group <nome-do-grupo> --sku F1 --partition-count 2 --name <hub_name>
+
+================================================================================================
+REGISTAR UM DISPOSITIVO NO HUB (DEVICE ID):
+
+az iot hub device-identity create --device-id <nome-do-dispositivo> --hub-name <hub_name>
+
+================================================================================================
+OBTER CONNECTION STRING QUE VAI SEU USADA NA APP.PY ACIMA (NÃO ESQUECER DE IR LÁ SUBSTITUIR!!!):
+
+az iot hub device-identity connection-string show --device-id <nome-do-dispositivo> --output table --hub-name <hub_name>
+
+================================================================================================
+CRIAR A PASTA AZURITE E DEIXAR ESTE TERMINAL A CORRER (INSERIR COMANDO DENTRO DO DIRECTORIO ONDE SE QUER CRIAR APASTA AZURITE):
+
+azurite --location azurite
+
+================================================================================================
+CRIAR PASTA PARA A FUNÇÃO (ATENÇÃO PROFESSOR DÁ O NOME DA PASTA):
+
+
+mkdir <nome-da-pasta>
+
+cd <nome-da-pasta>
+
+func init --worker-runtime python <nome-pode-ser-igual-ao-da-pasta>
+
+code .
+
+================================================================================================
+COMO DEVEM ESTAR OS FICHEIROS NA PASTA:
+
+#host.json )
+
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      }
+    }
+  },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[2.*, 3.0.0)"
+  }
+}
+
+=======================================================================================
+
+#local.settings.json (as connection strings vão ter de ser substituidas aqui))
+
+
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "IOT_HUB_CONNECTION_STRING": "<connection string>",
+    "REGISTRY_MANAGER_CONNECTION_STRING": "<connection string>"
+  }
+}
+
+================================================================================================
+
+#requirements.txt)
+
+azure-functions
+azure-iot-hub
+
+================================================================================================
+
+pip3 install -r requirements.txt
+
+================================================================================================
+OBTER A IOT HUB CONNECTION STRING E SUBSTITUIR NO FICHEIRO local.settings.json (COMEÇA EM "Endpoint="): 
+
+az iot hub connection-string show --default-eventhub --output table --hub-name <hub_name>
+
+================================================================================================
+CRIAR O EVENT TRIGGER A PARTIR DO TERMINAL DO VS CODE:
+
+func new --name iot-hub-trigger --template "Azure Event Hub trigger"
+
+ISTO VAI CRIAR UMA PASTA CHAMADA iot-hub-trigger DENTRO DA PASTA DA FUNÇÃO
+COM OS FICHEIROS __init__.py E function.json
+
+================================================================================================
+COMO DEVEM ESTAR OS FICHEIROS NA PASTA:
+
+
+#function.json)
+
+{
+  "scriptFile": "__init__.py",
+  "bindings": [
+    {
+      "type": "eventHubTrigger",
+      "name": "event",
+      "direction": "in",
+      "eventHubName": "",
+      "connection": "IOT_HUB_CONNECTION_STRING",
+      "cardinality": "one",
+      "consumerGroup": "$Default",
+      "dataType": "binary"
+    }
+  ]
+}
+
+
+================================================================================================
+EXEMPLO DE __init__.py)
+
+import logging
+import azure.functions as func
+import json
+import os
+from azure.iot.hub import IoTHubRegistryManager
+from azure.iot.hub.models import CloudToDeviceMethod
+
+def main(event: func.EventHubEvent):    
+    body = json.loads(event.get_body().decode('utf-8'))
+    device_id = event.iothub_metadata['connection-device-id']
+
+    logging.info(f'Received message: {body} from {device_id}')
+
+    
+    valorSENSOR = body['SENSOR']
+
+    if valorSENSOR > 450:
+        direct_method = CloudToDeviceMethod(method_name='ATUADOR_on', payload='{}')
+    else:
+        direct_method = CloudToDeviceMethod(method_name='ATUADOR_off', payload='{}')
+
+    logging.info(f'Sending direct method request for {direct_method.method_name} to device {device_id}')
+    
+    registry_manager_connection_string = os.environ['REGISTRY_MANAGER_CONNECTION_STRING']
+    registry_manager = IoTHubRegistryManager(registry_manager_connection_string)
+
+    registry_manager.invoke_device_method(device_id, direct_method)
+
+    logging.info('Direct method request sent!')
+    
+    
+
+================================================================================================
+OBTER A REGISTRY MANAGER CONNECTION STRING E SUBSTITUIR NO FICHEIRO local.settings.json (COMEÇA EM "HostName="): 
+
+az iot hub connection-string show --policy-name service --output table --hub-name <hub_name>
+
+================================================================================================
+CRIAR STORAGE ACCOUNT:
+
+az storage account create --resource-group <nome-do-grupo> --sku Standard_LRS --name <storage_name> 
+
+================================================================================================
+CRIAR FUNCTION APP:
+
+az functionapp create --resource-group <nome-do-grupo> --runtime python --functions-version 3 --os-type Linux --consumption-plan-location <location> --storage-account <storage_name> --name <functions_app_name>
+
+================================================================================================
+DEFINIR AS CONNECTION STRINGS QUE A FUNÇÃO NA CLOUD VAI USAR:
+
+TEM QUE SE SUBSTITUIR OS connection string PELO VALOR QUE ESTÁ NO FICHEIRO local.settings.json DESDE 
+A PALAVRA Endpoint OU HostName ATÉ AO FINAL, SEM AS ASPAS (SÓ FICA COM AS ASPAS QUE APARECEM ABAIXO!!!!)
+
+az functionapp config appsettings set --resource-group <nome-do-grupo> --name <functions_app_name> --settings "IOT_HUB_CONNECTION_STRING=<connection string>"
+
+----
+
+az functionapp config appsettings set --resource-group <nome-do-grupo> --name <functions_app_name> --settings "REGISTRY_MANAGER_CONNECTION_STRING=<connection string>"
+
+================================================================================================
+FAZER DEPLOY DA FUNÇÃO PARA A CLOUD CORRENDO O SEGUITE COMADO NO TERMINAL DO VSCODE:
+
+func azure functionapp publish <functions_app_name>
+
+================================================================================================
+
+TESTAR CORRENDO A APP.PY AO MESMO TEMPO QUE SE CORRE O COUNTERFIT NOUTRO TERMINAL COM O SENSORES 
+E ATUADORES NO PINS CORRECTOS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

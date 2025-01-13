@@ -1,0 +1,406 @@
+==AZURE ADC (8 E 9)==
+
+----CÓDIGO DA COISA ----
+
+
+from counterfit_connection import CounterFitConnection
+CounterFitConnection.init('127.0.0.1', 5000)
+
+import time
+from counterfit_shims_grove.adc import ADC
+from counterfit_shims_grove.grove_led import GroveLed
+import json
+from azure.iot.device import IoTHubDeviceClient, Message, MethodResponse
+
+connection_string = '<CONNECTION_STRING>'
+
+adc = ADC()
+ATUADOR = GroveLed(6)
+
+device_client = IoTHubDeviceClient.create_from_connection_string(connection_string)
+
+print('Connecting')
+device_client.connect()
+print('Connected')
+
+def handle_method_request(request):
+    print("Direct method received - ", request.name)
+    
+    if request.name == "ATUADOR_on":
+        ATUADOR.on()
+    elif request.name == "ATUADOR_off":
+        ATUADOR.off()
+
+    method_response = MethodResponse.create_from_method_request(request, 200)
+    device_client.send_method_response(method_response)
+
+device_client.on_method_request_received = handle_method_request
+
+while True:
+    valorSENSOR = adc.read(3)
+    print("SENSOR:", valorSENSOR)
+
+    
+    message = Message(json.dumps({ 'SENSOR': valorSENSOR }))
+    device_client.send_message(message)
+
+    time.sleep(15)
+
+
+----CÓDIGO FUNÇÃO ----
+
+import logging
+import azure.functions as func
+import json
+import os
+from azure.iot.hub import IoTHubRegistryManager
+from azure.iot.hub.models import CloudToDeviceMethod
+
+def main(event: func.EventHubEvent):    
+    body = json.loads(event.get_body().decode('utf-8'))
+    device_id = event.iothub_metadata['connection-device-id']
+
+    logging.info(f'Received message: {body} from {device_id}')
+
+    
+    valorSENSOR = body['SENSOR']
+
+    if valorSENSOR > 450:
+        direct_method = CloudToDeviceMethod(method_name='ATUADOR_on', payload='{}')
+    else:
+        direct_method = CloudToDeviceMethod(method_name='ATUADOR_off', payload='{}')
+
+    logging.info(f'Sending direct method request for {direct_method.method_name} to device {device_id}')
+    
+    registry_manager_connection_string = os.environ['REGISTRY_MANAGER_CONNECTION_STRING']
+    registry_manager = IoTHubRegistryManager(registry_manager_connection_string)
+
+    registry_manager.invoke_device_method(device_id, direct_method)
+
+    logging.info('Direct method request sent!')
+    
+=======================================================================================================================
+
+
+==AZURE LIGHT (8 E 9)==
+
+
+----CÓDIGO DA COISA ----
+
+
+from counterfit_connection import CounterFitConnection
+CounterFitConnection.init('127.0.0.1', 5000)
+
+import time
+from counterfit_shims_grove.grove_light_sensor_v1_2 import GroveLightSensor
+from counterfit_shims_grove.grove_led import GroveLed
+import json
+from azure.iot.device import IoTHubDeviceClient, Message, MethodResponse
+
+connection_string = '<CONNECTION_STRING>'
+
+light_Sensor = GroveLightSensor(3)
+ATUADOR = GroveLed(6)
+
+device_client = IoTHubDeviceClient.create_from_connection_string(connection_string)
+
+print('Connecting')
+device_client.connect()
+print('Connected')
+
+def handle_method_request(request):
+    print("Direct method received - ", request.name)
+    
+    if request.name == "ATUADOR_on":
+        ATUADOR.on()
+    elif request.name == "ATUADOR_off":
+        ATUADOR.off()
+
+    method_response = MethodResponse.create_from_method_request(request, 200)
+    device_client.send_method_response(method_response)
+
+device_client.on_method_request_received = handle_method_request
+
+while True:
+    valorSENSOR = light_Sensor.light
+    print("SENSOR:", valorSENSOR)
+
+    
+    message = Message(json.dumps({ 'SENSOR': valorSENSOR }))
+    device_client.send_message(message)
+
+    time.sleep(15)
+
+
+
+=======================================================================================================================
+
+==AZURE DHT (8 E 9)==
+
+pip3 install counterfit-shims-seeed-python-dht
+
+==============================================
+
+
+----CÓDIGO DA COISA ----
+
+
+from counterfit_connection import CounterFitConnection
+CounterFitConnection.init('127.0.0.1', 5000)
+
+import time
+from counterfit_shims_seeed_python_dht import DHT
+from counterfit_shims_grove.grove_led import GroveLed
+import json
+from azure.iot.device import IoTHubDeviceClient, Message, MethodResponse
+
+
+connection_string = '<CONNECTION_STRING>'
+
+
+SENSOR = DHT("11", 5, 6)  
+ATUADOR = GroveLed(7)
+
+device_client = IoTHubDeviceClient.create_from_connection_string(connection_string)
+
+print('Connecting')
+device_client.connect()
+print('Connected')
+
+def handle_method_request(request):
+    print("Direct method received - ", request.name)
+    
+    if request.name == "ATUADOR_on":
+        ATUADOR.on()
+    elif request.name == "ATUADOR_off":
+        ATUADOR.off()
+
+    method_response = MethodResponse.create_from_method_request(request, 200)
+    device_client.send_method_response(method_response)
+
+device_client.on_method_request_received = handle_method_request
+
+while True:
+    
+    _, temp = SENSOR.read()
+    print("Temperatura:", temp)
+
+    
+    message = Message(json.dumps({ 'SENSOR': temp }))
+    device_client.send_message(message)
+
+    time.sleep(15)
+
+
+
+
+=======================================================================================================================
+
+==MQTT ADC (4 E 7)==
+
+pip3 install paho-mqtt==1.6.1
+
+https://www.guidgen.com/
+
+=============================
+
+
+----CÓDIGO DA COISA ----
+
+from counterfit_connection import CounterFitConnection
+CounterFitConnection.init('127.0.0.1', 5000)
+
+import time
+from counterfit_shims_grove.adc import ADC
+from counterfit_shims_grove.grove_relay import GroveRelay
+import json
+import paho.mqtt.client as mqtt
+
+adc = ADC()
+ATUADOR = GroveRelay(5)
+
+id = '<ID>'
+
+client_telemetry_topic = id + '/telemetry'
+server_command_topic = id + '/commands'
+client_name = id + 'soilmoisturesensor_client'
+
+mqtt_client = mqtt.Client(client_name)
+mqtt_client.connect('test.mosquitto.org')
+
+mqtt_client.loop_start()
+
+def handle_command(client, userdata, message):
+    payload = json.loads(message.payload.decode())
+    print("Message received:", payload)
+
+    if payload['ATUADOR_on']:
+        ATUADOR.on()
+    else:
+        ATUADOR.off()
+
+mqtt_client.subscribe(server_command_topic)
+mqtt_client.on_message = handle_command
+
+while True:
+    SENSOR = adc.read(0)
+    print("VALOR:", SENSOR)
+
+    mqtt_client.publish(client_telemetry_topic, json.dumps({'VALOR' : SENSOR}))
+
+    time.sleep(10)
+
+
+----CÓDIGO SERVIDOR ----
+
+import json
+import time
+
+import paho.mqtt.client as mqtt
+
+id = '<ID>'
+
+client_telemetry_topic = id + '/telemetry'
+server_command_topic = id + '/commands'
+client_name = id + 'soilmoisturesensor_server'
+
+mqtt_client = mqtt.Client(client_name)
+mqtt_client.connect('test.mosquitto.org')
+
+mqtt_client.loop_start()
+
+def handle_telemetry(client, userdata, message):
+    payload = json.loads(message.payload.decode())
+    print("Message received:", payload)
+
+    command = { 'ATUADOR_on' : payload['VALOR'] > 450 }
+    print("Sending message:", command)
+
+    client.publish(server_command_topic, json.dumps(command))
+
+mqtt_client.subscribe(client_telemetry_topic)
+mqtt_client.on_message = handle_telemetry
+
+while True:
+    time.sleep(2)
+
+=======================================================================================================================
+
+==MQTT LIGHT (4 E 7)==
+
+pip3 install paho-mqtt==1.6.1
+
+https://www.guidgen.com/
+
+=============================
+
+
+----CÓDIGO DA COISA ----
+
+from counterfit_connection import CounterFitConnection
+from counterfit_shims_grove.grove_light_sensor_v1_2 import GroveLightSensor
+from counterfit_shims_grove.grove_relay import GroveRelay
+import json
+import paho.mqtt.client as mqtt
+import time
+
+CounterFitConnection.init('127.0.0.1', 5000)
+
+light_sensor = GroveLightSensor(0)
+ATUADOR = GroveRelay(5)
+
+id = 'ID'
+
+client_telemetry_topic = id + '/telemetry'
+server_command_topic = id + '/commands'
+client_name = id + 'soilmoisturesensor_client'
+
+mqtt_client = mqtt.Client(client_name)
+mqtt_client.connect('test.mosquitto.org')
+
+mqtt_client.loop_start()
+
+def handle_command(client, userdata, message):
+    payload = json.loads(message.payload.decode())
+    print("Message received:", payload)
+
+    if payload['ATUADOR_on']:
+        ATUADOR.on()
+    else:
+        ATUADOR.off()
+
+mqtt_client.subscribe(server_command_topic)
+mqtt_client.on_message = handle_command
+
+while True:
+    SENSOR = light_sensor.light
+    print("VALOR:", SENSOR)
+
+    mqtt_client.publish(client_telemetry_topic, json.dumps({'VALOR': SENSOR}))
+
+    time.sleep(10)
+
+
+
+=======================================================================================================================
+
+==MQTT DHT (4 E 7)==
+
+pip3 install paho-mqtt==1.6.1
+
+https://www.guidgen.com/
+
+pip3 install counterfit-shims-seeed-python-dht
+
+=============================
+
+
+----CÓDIGO DA COISA ----
+
+from counterfit_connection import CounterFitConnection
+from counterfit_shims_grove.grove_relay import GroveRelay
+from counterfit_shims_seeed_python_dht import DHT
+import json
+import paho.mqtt.client as mqtt
+import time
+
+CounterFitConnection.init('127.0.0.1', 5000)
+
+SENSOR = DHT("11", 5)
+ATUADOR = GroveRelay(7)
+
+id = '<ID>'
+
+client_telemetry_topic = id + '/telemetry'
+server_command_topic = id + '/commands'
+client_name = id + 'soilmoisturesensor_client'
+
+mqtt_client = mqtt.Client(client_name)
+mqtt_client.connect('test.mosquitto.org')
+
+mqtt_client.loop_start()
+
+def handle_command(client, userdata, message):
+    payload = json.loads(message.payload.decode())
+    print("Message received:", payload)
+
+    if payload['ATUADOR_on']:
+        ATUADOR.on()
+    else:
+        ATUADOR.off()
+
+mqtt_client.subscribe(server_command_topic)
+mqtt_client.on_message = handle_command
+
+while True:
+    _, temp = SENSOR.read()
+    print("VALOR:", temp)
+
+    mqtt_client.publish(client_telemetry_topic, json.dumps({'VALOR': temp}))
+
+    time.sleep(10)
+
+
+
+=======================================================================================================================
+
