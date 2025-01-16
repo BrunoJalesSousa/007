@@ -1,0 +1,55 @@
+pip3 install CounterFit
+
+pip3 install werkzeug==2.2.2
+
+pip3 install counterfit-connection
+
+pip3 install counterfit-shims-grove
+
+pip3 install azure-iot-device
+
+pip3 install pynmea2 azure-iot-device
+
+pip3 install counterfit-shims-serial
+
+az login
+
+counterfit
+
+az group create --name group20221294 --location uksouth
+
+az iot hub create --resource-group group20221294 --sku F1 --partition-count 2 --name hub20221294
+
+az iot hub device-identity create --device-id device20221294 --hub-name hub20221294
+
+az iot hub device-identity connection-string show --device-id device20221294 --output table --hub-name hub20221294
+
+azurite --location azurite
+
+mkdir trigger20221294
+
+cd trigger20221294/
+
+func init --worker-runtime python trigger20221294
+
+code .
+
+pip3 install -r requirements.txt
+
+az iot hub connection-string show --default-eventhub --output table --hub-name hub20221294
+
+func new --name iot-hub-trigger --template "Azure Event Hub trigger"
+
+az iot hub connection-string show --policy-name service --output table --hub-name hub20221294
+
+az storage account create --resource-group group20221294 --sku Standard_LRS --name sms20221294
+
+az functionapp create --resource-group group20221294 --runtime python --functions-version 3 --os-type Linux --consumption-plan-location uksouth --storage-account sms20221294 --name func20221294
+
+az functionapp config appsettings set --resource-group group20221294 --name func20221294 --settings "IOT_HUB_CONNECTION_STRING=Endpoint=sb://ihsuprodlnres010dednamespace.servicebus.windows.net/;SharedAccessKeyName=iothubowner;SharedAccessKey=RpLDi+G4252aqFhcbKaws9XHRB2nsZK6tAIoTK5t1+Y=;EntityPath=iothub-ehub-20221294hu-56376214-3851be1416"
+
+
+az functionapp config appsettings set --resource-group group20221294 --name func20221294 --settings "REGISTRY_MANAGER_CONNECTION_STRING=HostName=20221294hub.azure-devices.net;SharedAccessKeyName=service;SharedAccessKey=xtsH/kRFQI4RtTZvPBA2QM4GXo8pYDKpKAIoTMp9Fmk="
+
+func azure functionapp publish func20221294
+

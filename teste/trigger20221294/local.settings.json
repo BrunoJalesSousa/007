@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "IOT_HUB_CONNECTION_STRING": "Endpoint=sb://ihsuprodlnres010dednamespace.servicebus.windows.net/;SharedAccessKeyName=iothubowner;SharedAccessKey=RpLDi+G4252aqFhcbKaws9XHRB2nsZK6tAIoTK5t1+Y=;EntityPath=iothub-ehub-20221294hu-56376214-3851be1416",
+    "REGISTRY_MANAGER_CONNECTION_STRING": "HostName=20221294hub.azure-devices.net;SharedAccessKeyName=service;SharedAccessKey=xtsH/kRFQI4RtTZvPBA2QM4GXo8pYDKpKAIoTMp9Fmk="
+  }
+}
